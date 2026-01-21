@@ -6,28 +6,30 @@ import {
   Camera, Image as ImageIcon, X, Loader2, 
   Users, Sparkles, Check, ChevronRight, ChevronDown, ChevronUp,
   RefreshCw, HandCoins, ScanLine, Plus, Receipt, Wand2, Calculator,
-  AlertTriangle, Trash2
+  ArrowRight
 } from 'lucide-react';
 import { analyzeReceipt } from './actions'; 
 
 export default function Home() {
-  // --- STATE UTAMA ---
+  // --- STATE ---
   const [step, setStep] = useState(1);
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [friends, setFriends] = useState(['Aku']); 
+  const [friends, setFriends] = useState([]); 
   const [currentName, setCurrentName] = useState('');
   const [items, setItems] = useState([]);
   
-  // State Nominal (Rupiah)
+  // Nominal State
   const [taxAmount, setTaxAmount] = useState(0); 
   const [serviceAmount, setServiceAmount] = useState(0); 
   const [roundingAmount, setRoundingAmount] = useState(0); 
-  const [expandedUser, setExpandedUser] = useState(null);
+  
+  // LOGIKA BARU: Gunakan Array agar bisa buka banyak sekaligus
+  const [expandedUsers, setExpandedUsers] = useState([]); 
   
   // UI UX States
   const [isLoading, setIsLoading] = useState(false);
-  const [showResetModal, setShowResetModal] = useState(false); // <--- State untuk Modal Baru
+  const [showResetModal, setShowResetModal] = useState(false);
   const [countdown, setCountdown] = useState(8);
   const [loadingMsg, setLoadingMsg] = useState("Menghubungkan ke AI...");
 
@@ -36,7 +38,7 @@ export default function Home() {
 
   useEffect(() => { window.scrollTo(0, 0); }, [step]);
 
-  // --- LOADING TIMER ---
+  // Loading Timer Logic
   useEffect(() => {
     let timer;
     if (isLoading) {
@@ -56,7 +58,8 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [isLoading]);
 
-  // --- LOGIKA UTAMA ---
+  // --- LOGIKA ALUR ---
+  
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
@@ -65,19 +68,9 @@ export default function Home() {
     }
   };
 
-  const addFriend = (e) => {
-    e.preventDefault();
-    const val = currentName.trim();
-    if (val && !friends.includes(val)) {
-      setFriends([...friends, val]);
-      setCurrentName('');
-    }
-  };
-
-  const removeFriend = (name) => setFriends(friends.filter(f => f !== name));
-
-  const handleProcess = async () => {
-    if (!image || friends.length === 0) return;
+  // STEP 1: SCAN
+  const handleScan = async () => {
+    if (!image) return;
     setIsLoading(true);
     
     try {
@@ -99,6 +92,26 @@ export default function Home() {
     } finally { setIsLoading(false); }
   };
 
+  // STEP 2: INPUT TEMAN
+  const addFriend = (e) => {
+    e.preventDefault();
+    const val = currentName.trim();
+    if (val && !friends.includes(val)) {
+      setFriends([...friends, val]);
+      setCurrentName('');
+    }
+  };
+  const removeFriend = (name) => setFriends(friends.filter(f => f !== name));
+  
+  const finishInputFriends = () => {
+    if (friends.length === 0) {
+        alert("Minimal masukin satu nama dulu dong (misal: Aku)");
+        return;
+    }
+    setStep(3);
+  };
+
+  // STEP 3: ASSIGN & HITUNG
   const toggleAssign = (idx, friend) => {
     const newItems = [...items];
     const item = newItems[idx];
@@ -116,38 +129,33 @@ export default function Home() {
   const calculateResult = () => {
     const unassigned = items.filter(i => i.assignedTo.length === 0);
     if (unassigned.length > 0 && !confirm(`Ada ${unassigned.length} menu belum dipilih. Lanjut?`)) return;
-    setStep(3);
+    setStep(4);
   };
 
-  // --- LOGIKA RESET BARU (MODAL) ---
-  const triggerReset = () => {
-    setShowResetModal(true); // Buka Modal
+  // --- LOGIKA EXPAND USER (BARU) ---
+  const toggleUserDetail = (name) => {
+    setExpandedUsers(prev => {
+      if (prev.includes(name)) {
+        return prev.filter(u => u !== name); // Tutup jika sudah ada
+      } else {
+        return [...prev, name]; // Buka (tambah ke array)
+      }
+    });
   };
 
+  // RESET LOGIC
+  const triggerReset = () => setShowResetModal(true);
   const confirmReset = () => {
-    // Aksi Reset Sebenarnya
-    setStep(1); 
-    setImage(null); 
-    setPreview(null); 
-    setItems([]); 
-    setTaxAmount(0); 
-    setServiceAmount(0); 
-    setRoundingAmount(0); 
-    setExpandedUser(null);
-    setShowResetModal(false); // Tutup Modal
+    setStep(1); setImage(null); setPreview(null); setItems([]); setFriends([]);
+    setTaxAmount(0); setServiceAmount(0); setRoundingAmount(0); 
+    setExpandedUsers([]); // Reset list expand
+    setShowResetModal(false);
   };
 
-  const cancelReset = () => {
-    setShowResetModal(false); // Tutup Modal aja
-  };
-
-  // --- PERHITUNGAN BILL ---
+  // CALCULATE BILL
   const getCalculatedBill = () => {
     const billData = {};
-    friends.forEach(f => {
-      billData[f] = { items: [], subtotal: 0, extraCharge: 0, total: 0 };
-    });
-
+    friends.forEach(f => billData[f] = { items: [], subtotal: 0, extraCharge: 0, total: 0 });
     let totalSubtotalAll = 0;
 
     items.forEach(item => {
@@ -155,9 +163,7 @@ export default function Home() {
         const splitPrice = item.price / item.assignedTo.length;
         item.assignedTo.forEach(p => {
           billData[p].items.push({ 
-            name: item.name, 
-            qtyShare: (item.qty / item.assignedTo.length).toFixed(1), 
-            priceShare: splitPrice 
+            name: item.name, qtyShare: (item.qty / item.assignedTo.length).toFixed(1), priceShare: splitPrice 
           });
           billData[p].subtotal += splitPrice;
         });
@@ -171,9 +177,7 @@ export default function Home() {
     Object.keys(billData).forEach(name => {
       const person = billData[name];
       let share = 0;
-      if (totalSubtotalAll > 0) {
-        share = (person.subtotal / totalSubtotalAll) * totalExtras;
-      }
+      if (totalSubtotalAll > 0) share = (person.subtotal / totalSubtotalAll) * totalExtras;
       person.extraCharge = share;
       person.total = person.subtotal + share;
       grandTotal += person.total;
@@ -182,47 +186,21 @@ export default function Home() {
     return { billData, grandTotal, totalSubtotalAll };
   };
 
-  const { billData, grandTotal, totalSubtotalAll } = step === 3 ? getCalculatedBill() : { billData: {}, grandTotal: 0, totalSubtotalAll: 0 };
+  const { billData, grandTotal, totalSubtotalAll } = step === 4 ? getCalculatedBill() : { billData: {}, grandTotal: 0, totalSubtotalAll: 0 };
 
-  // --- UI RENDER ---
   return (
     <main className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 pb-40 relative">
       
-      {/* === MODAL KONFIRMASI RESET (BARU) === */}
+      {/* MODAL RESET */}
       {showResetModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          {/* Backdrop Blur */}
-          <div 
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-            onClick={cancelReset} // Klik luar untuk batal
-          ></div>
-          
-          {/* Kartu Modal */}
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowResetModal(false)}></div>
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-xs p-6 animate-in zoom-in-95 duration-200">
-            <div className="w-14 h-14 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-4 mx-auto">
-              <RefreshCw size={28} />
-            </div>
-            
-            <h3 className="text-xl font-bold text-slate-800 text-center mb-2">
-              Mulai Scan Baru?
-            </h3>
-            <p className="text-slate-500 text-center text-sm mb-6 leading-relaxed">
-              Data tagihan yang sekarang akan dihapus dan kamu akan kembali ke awal.
-            </p>
-            
+            <h3 className="text-xl font-bold text-slate-800 text-center mb-2">Mulai Scan Baru?</h3>
+            <p className="text-slate-500 text-center text-sm mb-6">Data tagihan akan dihapus.</p>
             <div className="grid grid-cols-2 gap-3">
-              <button 
-                onClick={cancelReset}
-                className="py-3 px-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
-              >
-                Batal
-              </button>
-              <button 
-                onClick={confirmReset}
-                className="py-3 px-4 rounded-xl font-bold text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-200 transition flex items-center justify-center gap-2"
-              >
-                 Ulangi
-              </button>
+              <button onClick={() => setShowResetModal(false)} className="py-3 px-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">Batal</button>
+              <button onClick={confirmReset} className="py-3 px-4 rounded-xl font-bold text-white bg-red-500 hover:bg-red-600">Ulangi</button>
             </div>
           </div>
         </div>
@@ -231,14 +209,9 @@ export default function Home() {
       {/* LOADING OVERLAY */}
       {isLoading && (
         <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-slate-900/90 backdrop-blur-sm animate-in fade-in duration-300 px-6 text-center">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-xs flex flex-col items-center relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500 animate-pulse"></div>
-            <div className="relative mb-4">
-              <Loader2 size={48} className="text-indigo-600 animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center font-bold text-xs text-indigo-800">{countdown}</div>
-            </div>
+          <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-xs flex flex-col items-center relative">
+            <Loader2 size={48} className="text-indigo-600 animate-spin mb-4" />
             <h3 className="text-xl font-bold text-slate-800 mb-1">Mohon Tunggu</h3>
-            <p className="text-slate-500 text-sm mb-4">Estimasi: {countdown} detik lagi</p>
             <div className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl text-xs font-medium animate-pulse">"{loadingMsg}"</div>
           </div>
         </div>
@@ -259,67 +232,86 @@ export default function Home() {
 
       <div className="max-w-md mx-auto p-4 pt-6">
         
-        {/* === STEP 1: INPUT & UPLOAD === */}
+        {/* === STEP 1: LANDING & SCAN === */}
         {step === 1 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="text-center py-4 px-2">
-              <h1 className="text-3xl font-extrabold text-indigo-950 tracking-tight mb-3">Bayar Woy! 💸</h1>
-              <p className="text-slate-500 text-sm leading-relaxed max-w-xs mx-auto">Makan bareng enak, pas bayar jangan ngilang. Yuk hitung siapa bayar berapa biar adil.</p>
-            </div>
-            <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-              <h2 className="font-bold text-slate-700 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
-                <Users size={16} className="text-indigo-600"/> Siapa Aja?
-              </h2>
-              <div className="flex flex-wrap gap-2 mb-4">
-                {friends.map(f => (
-                  <div key={f} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-2xl text-sm font-bold flex gap-2 items-center border border-indigo-100 animate-in zoom-in duration-200">
-                    {f} {f !== 'Aku' && <button onClick={() => removeFriend(f)}><X size={14} className="hover:text-red-500"/></button>}
-                  </div>
-                ))}
-                <form onSubmit={addFriend} className="flex items-center gap-2">
-                  <input value={currentName} onChange={e => setCurrentName(e.target.value)} placeholder="Nama..." className="w-28 px-3 py-2 rounded-2xl bg-slate-50 border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
-                  <button type="submit" disabled={!currentName} className="bg-slate-900 text-white p-2.5 rounded-xl hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition shadow-md"><Plus size={16} /></button> 
-                </form>
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pt-6">
+            <div className="text-center px-4 space-y-4">
+              <h1 className="text-5xl font-black text-slate-900 leading-[1.1] tracking-tight">
+                Bayar<br/><span className="text-indigo-600">Woy.</span>
+              </h1>
+              <div className="space-y-1">
+                <p className="text-xl font-bold text-slate-700">Jangan hilang pas tagihan datang.</p>
+                <p className="text-slate-500 font-medium">Yuk scan struk & split bill sekarang.</p>
               </div>
-            </section>
-            <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-              <h2 className="font-bold text-slate-700 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
-                <ScanLine size={16} className="text-indigo-600"/> Scan Struk
-              </h2>
+            </div>
+
+            <section className="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/50 border border-slate-100 mt-8">
               <input type="file" ref={galleryInputRef} onChange={handleFileSelect} className="hidden" accept="image/*" />
               <input type="file" ref={cameraInputRef} onChange={handleFileSelect} className="hidden" accept="image/*" capture="environment" />
+              
               {preview ? (
-                <div className="relative h-80 w-full rounded-2xl overflow-hidden bg-slate-900 shadow-inner group">
-                  <NextImage src={preview} alt="Struk" fill className="object-contain opacity-90" />
-                  {!isLoading && <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-500/20 to-transparent z-10 animate-scan pointer-events-none"></div>}
-                  <button onClick={() => {setImage(null); setPreview(null)}} className="absolute top-3 right-3 bg-black/50 backdrop-blur text-white p-2 rounded-full hover:bg-red-500 transition z-20"><X size={18} /></button>
-                  <div className="absolute bottom-3 left-0 right-0 text-center"><span className="text-xs text-white/80 bg-black/30 px-3 py-1 rounded-full backdrop-blur-sm">Struk Terdeteksi</span></div>
+                <div className="space-y-6">
+                  <div className="relative h-96 w-full rounded-2xl overflow-hidden bg-slate-900 shadow-inner group border-4 border-indigo-100">
+                    <NextImage src={preview} alt="Struk" fill className="object-contain" />
+                    <button onClick={() => {setImage(null); setPreview(null)}} className="absolute top-3 right-3 bg-black/50 backdrop-blur text-white p-2 rounded-full hover:bg-red-500 transition z-20"><X size={18} /></button>
+                  </div>
+                  <button onClick={handleScan} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 active:scale-[0.98] transition flex justify-center items-center gap-2 animate-in slide-in-from-bottom-2">
+                    <ScanLine size={24} /> Mulai Scan Struk
+                  </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  <button onClick={() => cameraInputRef.current?.click()} className="h-40 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white flex flex-col items-center justify-center gap-3 transition-transform active:scale-95 shadow-lg shadow-indigo-200 relative overflow-hidden group">
-                    <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <div className="p-4 bg-white/20 rounded-full backdrop-blur-sm"><Camera size={32} /></div>
-                    <span className="font-bold">Kamera</span>
-                  </button>
-                  <button onClick={() => galleryInputRef.current?.click()} className="h-40 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex flex-col items-center justify-center gap-3 transition-transform active:scale-95 border border-slate-200">
-                     <div className="p-4 bg-white rounded-full shadow-sm text-slate-500"><ImageIcon size={32} /></div>
-                    <span className="font-bold">Galeri</span>
-                  </button>
+                <div className="grid grid-cols-1 gap-4">
+                   <button onClick={() => cameraInputRef.current?.click()} className="h-24 rounded-2xl bg-slate-900 text-white flex items-center justify-between px-8 hover:scale-[1.02] transition-transform shadow-lg active:scale-95 group">
+                      <span className="text-lg font-bold">Buka Kamera</span>
+                      <div className="bg-white/20 p-3 rounded-full group-hover:bg-white/30 transition"><Camera size={28} /></div>
+                   </button>
+                   <button onClick={() => galleryInputRef.current?.click()} className="h-24 rounded-2xl bg-white border-2 border-slate-200 text-slate-700 flex items-center justify-between px-8 hover:bg-slate-50 transition-colors active:scale-95">
+                      <span className="text-lg font-bold">Pilih Galeri</span>
+                      <div className="bg-slate-100 p-3 rounded-full"><ImageIcon size={28} /></div>
+                   </button>
                 </div>
               )}
             </section>
           </div>
         )}
 
-        {/* === STEP 2: ASSIGN UI === */}
+        {/* === STEP 2: INPUT TEMAN === */}
         {step === 2 && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300">
+             <div className="text-center py-2">
+                <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold mb-3 inline-block">
+                  <Check size={12} className="inline mr-1"/> Scan Berhasil
+                </span>
+                <h2 className="text-2xl font-bold text-slate-900">Absen Dulu, Siapa yang Ikut?</h2>
+                <p className="text-slate-500 text-sm mt-1">Masukkan nama teman (atau dirimu sendiri).</p>
+             </div>
+
+             <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+                <form onSubmit={addFriend} className="flex gap-2 mb-6">
+                   <input value={currentName} onChange={e => setCurrentName(e.target.value)} placeholder="Tulis nama..." className="flex-1 px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" autoFocus />
+                   <button type="submit" disabled={!currentName} className="bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition"><Plus size={24} /></button>
+                </form>
+
+                <div className="flex flex-wrap gap-2">
+                  {friends.length === 0 && <p className="text-slate-400 text-sm w-full text-center italic py-4">Belum ada nama...</p>}
+                  {friends.map(f => (
+                    <div key={f} className="bg-white border-2 border-indigo-100 text-indigo-700 px-4 py-2 rounded-xl font-bold flex gap-2 items-center shadow-sm animate-in zoom-in">
+                      {f} <button onClick={() => removeFriend(f)}><X size={16} className="text-slate-400 hover:text-red-500"/></button>
+                    </div>
+                  ))}
+                </div>
+             </section>
+          </div>
+        )}
+
+        {/* === STEP 3: ASSIGN ITEMS === */}
+        {step === 3 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-right duration-300">
-             <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex gap-3 items-start">
-                <div className="bg-blue-100 text-blue-600 p-2 rounded-xl shrink-0"><Sparkles size={18} /></div>
+             <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex gap-3 items-start">
+                <div className="bg-indigo-100 text-indigo-600 p-2 rounded-xl shrink-0"><Receipt size={18} /></div>
                 <div>
-                  <p className="text-sm font-bold text-blue-900">Pilih Pemilik Menu</p>
-                  <p className="text-xs text-blue-700 mt-1">Klik nama teman, lalu cek kolom Rupiah di bawah.</p>
+                  <p className="text-sm font-bold text-indigo-900">Rincian Tagihan</p>
+                  <p className="text-xs text-indigo-700 mt-1">Pilih siapa yang makan menu ini.</p>
                 </div>
               </div>
 
@@ -334,7 +326,7 @@ export default function Home() {
                     </div>
                     <div className="text-right">
                       <p className="font-bold text-indigo-600 text-lg">Rp {item.price.toLocaleString()}</p>
-                      <button onClick={() => assignAll(idx)} className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg mt-1 font-bold hover:bg-indigo-100 transition">PILIH SEMUA</button>
+                      <button onClick={() => assignAll(idx)} className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg mt-1 font-bold hover:bg-indigo-100 transition">SEMUA</button>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -344,71 +336,54 @@ export default function Home() {
                         <button key={friend} onClick={() => toggleAssign(idx, friend)} 
                           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 
                             ${active ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200 scale-105' : 'bg-white text-slate-500 border-slate-100 hover:border-indigo-200'}
-                          `}>
-                          {friend}
-                        </button>
+                          `}>{friend}</button>
                       );
                     })}
                   </div>
                 </div>
               ))}
               
-              {/* INPUT NOMINAL TAX & SERVICE (RUPIAH) */}
               <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 space-y-4">
                  <h3 className="font-bold text-slate-700 flex items-center gap-2 text-sm uppercase tracking-wide">
-                    <Receipt size={16} className="text-indigo-600"/> Biaya Tambahan (Dalam Rupiah)
+                    <Receipt size={16} className="text-indigo-600"/> Biaya Tambahan (Rp)
                  </h3>
-                 
                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                       <label className="text-xs font-bold text-slate-500 mb-1 block">Pajak (Tax) Rp</label>
-                       <input type="number" value={taxAmount} onChange={e => setTaxAmount(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none" placeholder="0" />
+                       <label className="text-xs font-bold text-slate-500 mb-1 block">Tax</label>
+                       <input type="number" value={taxAmount} onChange={e => setTaxAmount(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold" placeholder="0" />
                     </div>
                     <div>
-                       <label className="text-xs font-bold text-slate-500 mb-1 block">Service Charge Rp</label>
-                       <input type="number" value={serviceAmount} onChange={e => setServiceAmount(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 outline-none" placeholder="0" />
+                       <label className="text-xs font-bold text-slate-500 mb-1 block">Service</label>
+                       <input type="number" value={serviceAmount} onChange={e => setServiceAmount(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold" placeholder="0" />
                     </div>
                  </div>
-
-                 {/* KOLOM PEMBULATAN */}
                  <div className="pt-2 border-t border-slate-100">
-                    <label className="text-xs font-bold text-slate-500 mb-1 flex items-center gap-1">
-                      <Calculator size={12}/> Pembulatan / Selisih (Rp)
-                    </label>
-                    <div className="flex gap-2 items-center">
-                        <input type="number" value={roundingAmount} onChange={e => setRoundingAmount(e.target.value)} className="w-full bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-xl px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-yellow-500/20 outline-none" placeholder="Contoh: 400 atau -100" />
-                        <span className="text-xs text-slate-400 shrink-0 w-1/3 leading-tight">
-                            Masukkan selisih angka (misal 400) biar totalnya pas struk.
-                        </span>
-                    </div>
-                 </div>
-
-                 <div className="text-xs text-slate-400 bg-slate-50 p-2 rounded-lg text-center flex items-center justify-center gap-2">
-                    <Wand2 size={12} /> Biaya ini akan dibagi proporsional ke semua orang.
+                    <label className="text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Calculator size={12}/> Pembulatan (Rp)</label>
+                    <input type="number" value={roundingAmount} onChange={e => setRoundingAmount(e.target.value)} className="w-full bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-xl px-3 py-2 text-sm font-bold" placeholder="Contoh: 400" />
                  </div>
               </div>
           </div>
         )}
 
-        {/* === STEP 3: RESULT UI === */}
-        {step === 3 && (
+        {/* === STEP 4: RESULT === */}
+        {step === 4 && (
           <div className="space-y-4 animate-in zoom-in-95 duration-300">
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex gap-3 items-center">
-               <div className="bg-blue-100 text-blue-600 p-2 rounded-xl shrink-0"><Check size={18} /></div>
-               <p className="text-sm font-bold text-blue-900">Tagihan Siap! <span className="font-normal text-blue-700">Klik nama untuk melihat detail.</span></p>
+            <div className="bg-green-50 border border-green-100 rounded-2xl p-4 flex gap-3 items-center">
+               <div className="bg-green-100 text-green-600 p-2 rounded-xl shrink-0"><Check size={18} /></div>
+               <p className="text-sm font-bold text-green-900">Tagihan Siap! <span className="font-normal text-green-700">Klik nama untuk detail.</span></p>
             </div>
 
             <div className="grid gap-3">
               {Object.entries(billData).map(([name, data]) => {
-                const isExpanded = expandedUser === name;
+                const isExpanded = expandedUsers.includes(name); // <-- CEK ARRAY
                 return (
                   <div key={name} className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden transition-all">
-                    <button onClick={() => setExpandedUser(isExpanded ? null : name)} className="w-full p-5 flex justify-between items-center bg-white hover:bg-slate-50 transition active:bg-slate-100">
+                    <button onClick={() => toggleUserDetail(name)} className="w-full p-5 flex justify-between items-center bg-white hover:bg-slate-50">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center font-bold text-xl text-indigo-600">{name.charAt(0).toUpperCase()}</div>
                         <div className="text-left">
                            <span className="font-bold text-slate-800 text-lg block">{name}</span>
-                           <span className="text-xs text-slate-400 font-medium">{data.items.length} Menu • Klik untuk rincian</span>
+                           <span className="text-xs text-slate-400 font-medium">{data.items.length} Menu</span>
                         </div>
                       </div>
                       <div className="text-right">
@@ -418,28 +393,17 @@ export default function Home() {
                     </button>
                     {isExpanded && (
                        <div className="bg-slate-50 p-5 border-t border-slate-100 animate-in slide-in-from-top-2 duration-200">
-                          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Rincian Menu</p>
                           <div className="space-y-2 mb-4">
                              {data.items.map((item, i) => (
                                 <div key={i} className="flex justify-between text-sm text-slate-600">
-                                   <span>{item.name} <span className="text-slate-400 text-xs">({item.name === item.name ? '' : 'Patungan'})</span></span>
+                                   <span>{item.name}</span>
                                    <span className="font-mono text-slate-800">Rp {Math.round(item.priceShare).toLocaleString()}</span>
                                 </div>
                              ))}
                           </div>
-                          <div className="border-t border-slate-200 my-2 pt-2 space-y-1">
-                             <div className="flex justify-between text-xs text-slate-500">
-                                <span>Subtotal</span>
-                                <span>Rp {Math.round(data.subtotal).toLocaleString()}</span>
-                             </div>
-                             <div className="flex justify-between text-xs text-slate-500">
-                                <span>Tax, Service, dll</span>
-                                <span>+ Rp {Math.round(data.extraCharge).toLocaleString()}</span>
-                             </div>
-                          </div>
-                          <div className="flex justify-between text-sm font-bold text-indigo-700 border-t border-indigo-100 pt-2 mt-2">
-                             <span>Total Bayar</span>
-                             <span>Rp {Math.ceil(data.total).toLocaleString()}</span>
+                          <div className="border-t border-slate-200 pt-2 flex justify-between text-xs text-slate-500">
+                             <span>Extra (Tax/Svc)</span>
+                             <span>+ Rp {Math.round(data.extraCharge).toLocaleString()}</span>
                           </div>
                        </div>
                     )}
@@ -449,21 +413,10 @@ export default function Home() {
             </div>
 
             <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl mt-6">
-               <div className="flex justify-between items-center mb-2">
-                  <span className="text-slate-400 text-sm font-medium">Subtotal Menu</span>
-                  <span className="font-mono text-slate-200">Rp {Math.round(totalSubtotalAll).toLocaleString()}</span>
-               </div>
-               <div className="flex justify-between items-center mb-4 pb-4 border-b border-slate-700">
-                  <span className="text-slate-400 text-sm font-medium">Total Extra (Tax/Svc)</span>
-                  <span className="font-mono text-slate-200">+ Rp {Math.round(grandTotal - totalSubtotalAll).toLocaleString()}</span>
-               </div>
                <div className="flex justify-between items-end">
                   <div>
                      <span className="text-slate-400 text-xs uppercase tracking-widest font-bold block mb-1">Total Keseluruhan</span>
                      <h2 className="text-3xl font-extrabold tracking-tight">Rp {Math.ceil(grandTotal).toLocaleString()}</h2>
-                  </div>
-                  <div className="bg-white/10 p-2 rounded-xl">
-                     <Receipt size={24} className="text-indigo-400" />
                   </div>
                </div>
             </div>
@@ -472,19 +425,23 @@ export default function Home() {
 
       </div>
 
-      {/* ACTION BUTTON */}
+      {/* ACTION BUTTONS */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-xl border-t border-slate-200 z-40 safe-area-bottom shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
         <div className="max-w-md mx-auto">
-          {step === 1 && (
-            <button onClick={handleProcess} disabled={!image || friends.length === 0 || isLoading} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-indigo-300 hover:bg-indigo-700 hover:-translate-y-1 active:translate-y-0 disabled:bg-slate-300 disabled:shadow-none disabled:transform-none transition-all flex justify-center items-center gap-3">
-              <Sparkles size={20} fill="currentColor" /> Scan & Bagi Tagihan
-            </button>
-          )}
           {step === 2 && (
-             <button onClick={calculateResult} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold text-lg shadow-xl hover:bg-slate-800 active:scale-[0.98] transition flex justify-center items-center gap-2">Hitung Total <ChevronRight /></button>
+             <button onClick={finishInputFriends} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-indigo-300 hover:bg-indigo-700 active:scale-[0.98] transition flex justify-center items-center gap-2">
+               Lanjut Bagi Menu <ArrowRight />
+             </button>
           )}
           {step === 3 && (
-            <button onClick={triggerReset} className="w-full bg-slate-100 text-slate-700 py-4 rounded-2xl font-bold text-lg hover:bg-slate-200 transition">Scan Lagi</button>
+             <button onClick={calculateResult} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold text-lg shadow-xl hover:bg-slate-800 active:scale-[0.98] transition flex justify-center items-center gap-2">
+               Hitung Total <ChevronRight />
+             </button>
+          )}
+          {step === 4 && (
+            <button onClick={triggerReset} className="w-full bg-slate-100 text-slate-700 py-4 rounded-2xl font-bold text-lg hover:bg-slate-200 transition">
+              Scan Lagi
+            </button>
           )}
         </div>
       </div>
