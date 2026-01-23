@@ -18,7 +18,7 @@ export const metadata = {
 
   // 2. VERIFIKASI GOOGLE (Wajib agar terdaftar di Search Console)
   verification: {
-    google: "9G-L9yP2bQFUTKp8NdLx6UADAZK0ZtpIIOuSVe4txUg",
+    google: "il5LtaigbSlpRNbtJrV_R6epKRI96eOWXO6tFo4bxXg",
   },
 
   // 3. KATA KUNCI (Agar mudah dicari)
