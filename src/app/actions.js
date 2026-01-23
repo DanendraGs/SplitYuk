@@ -17,82 +17,69 @@ export async function analyzeReceipt(formData) {
     const base64Image = buffer.toString("base64");
 
     const genAI = new GoogleGenerativeAI(apiKey);
-
-    // Tetap gunakan model preview yang kamu pilih (atau gemini-1.5-flash-latest)
     const model = genAI.getGenerativeModel({ 
       model: "gemini-3-flash-preview", 
       generationConfig: { responseMimeType: "application/json" } 
     });
 
-    // --- PROMPT BARU YANG LEBIH CERDAS ---
+    // --- PROMPT SPESIAL DETEKSI WAJAH & BENDA ---
     const prompt = `
-      Kamu adalah mesin kasir AI profesional. Tugasmu adalah mengekstrak data dari foto struk ini.
+      Kamu adalah AI visual yang cerdas dan humoris. Tugasmu menganalisis gambar ini.
 
-      INSTRUKSI PENTING:
-      1. **ITEMS**: Ambil semua menu makanan/minuman.
-         - Format: { "name": "Nama Menu", "qty": 1, "price": 15000 }
-         - "price" adalah HARGA TOTAL per baris (Harga Satuan x Qty).
-         - Perbaiki nama menu yang disingkat agar mudah dibaca.
-      
-      2. **IGNORE (JANGAN MASUKKAN KE ITEMS)**:
-         - Jangan masukkan baris yang berisi: "Subtotal", "Total", "Kembali", "Cash", "Debit".
-         - SANGAT PENTING: Jangan masukkan "Pajak", "Tax", "PB1", "PPN", "Service Charge", "SC", "Layanan" ke dalam array 'items'. Ini harus dipisah.
+      LANGKAH ANALISIS:
+      1. Cek apakah gambar ini adalah FOTO STRUK/TAGIHAN (Receipt)?
+      2. Jika BUKAN struk, cek apakah ini FOTO WAJAH MANUSIA?
+      3. Jika BUKAN keduanya, benda apakah ini?
 
-      3. **TAX & SERVICE**:
-         - Cari total nominal Pajak (Tax/PB1/VAT).
-         - Cari total nominal Service Charge (Layanan) jika ada.
-      
-      OUTPUT JSON WAJIB (Hanya JSON, tanpa markdown):
+      ATURAN OUTPUT (WAJIB JSON):
+
+      KONDISI A: JIKA INI ADALAH STRUK/TAGIHAN
+      Ekstrak data menu seperti biasa.
       {
-        "items": [
-          { "name": "Nasi Goreng", "qty": 2, "price": 30000 },
-          { "name": "Es Teh", "qty": 1, "price": 5000 }
-        ],
-        "tax_total": 3500,
+        "status": "receipt",
+        "items": [{ "name": "Nama Menu", "qty": 1, "price": 10000 }],
+        "tax_total": 0,
         "service_total": 0
+      }
+
+      KONDISI B: JIKA INI WAJAH MANUSIA (SELFIE/FOTO ORANG)
+      Berikan pujian yang menghibur, lucu, dan memotivasi (tentang orang sukses/kaya).
+      {
+        "status": "not_receipt",
+        "message": "Waduh, maaf ini bukan struk! Tapi saya melihat aura orang sukses yang ganteng/cantik. Rezekinya lancar nih!"
+      }
+      (Variasikan kata-katanya agar tidak membosankan, puji visualnya).
+
+      KONDISI C: JIKA INI BENDA LAIN (BUKAN STRUK, BUKAN ORANG)
+      Sebutkan benda apa itu dengan nada santai.
+      {
+        "status": "not_receipt",
+        "message": "Maaf, ini bukan struk tagihan. Ini sepertinya [NAMA BENDA]. Coba scan kertas tagihannya ya!"
       }
     `;
 
-    // --- LOGIKA AUTO-RETRY (3x Percobaan) ---
+    // RETRY LOGIC
     let attempt = 0;
-    let maxRetries = 3;
-    let lastError = null;
-
-    while (attempt < maxRetries) {
+    while (attempt < 3) {
       try {
-        console.log(`AI Membaca Struk (Percobaan ${attempt + 1})...`);
-        
         const result = await model.generateContent([
           prompt,
           { inlineData: { data: base64Image, mimeType: file.type } },
         ]);
-
         const response = await result.response;
-        const text = response.text();
-        
-        // Bersihkan JSON dari format markdown ```json ... ```
-        const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        const data = JSON.parse(cleanText);
-
-        // Validasi data sedikit
-        if (!data.items || !Array.isArray(data.items)) {
-          throw new Error("Format JSON tidak valid");
-        }
+        const text = response.text().replace(/```json/g, "").replace(/```/g, "").trim();
+        const data = JSON.parse(text);
 
         return { success: true, data: data };
-
       } catch (err) {
-        console.warn(`Gagal percobaan ke-${attempt + 1}:`, err.message);
-        lastError = err;
         attempt++;
-        if (attempt < maxRetries) await delay(2000); // Tunggu 2 detik
+        if (attempt < 3) await delay(1500);
       }
     }
-
-    throw lastError;
+    throw new Error("Gagal mengenali gambar.");
 
   } catch (error) {
     console.error("SERVER ERROR:", error);
-    return { error: "Gagal membaca struk. Pastikan foto jelas dan coba lagi." };
+    return { error: "Gagal memproses gambar. Coba lagi ya." };
   }
 }

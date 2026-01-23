@@ -6,7 +6,7 @@ import {
   Camera, Image as ImageIcon, X, Loader2, 
   Users, Sparkles, Check, ChevronRight, ChevronDown, ChevronUp,
   RefreshCw, HandCoins, ScanLine, Plus, Receipt, Wand2, Calculator,
-  ArrowRight, AlertTriangle
+  ArrowRight, AlertTriangle, Smile
 } from 'lucide-react';
 import { analyzeReceipt } from './actions'; 
 
@@ -23,14 +23,16 @@ export default function Home() {
   const [taxAmount, setTaxAmount] = useState(0); 
   const [serviceAmount, setServiceAmount] = useState(0); 
   const [roundingAmount, setRoundingAmount] = useState(0); 
-  
-  // Logic Expand User
   const [expandedUsers, setExpandedUsers] = useState([]); 
   
   // UI UX States
   const [isLoading, setIsLoading] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
-  const [showFriendWarning, setShowFriendWarning] = useState(false); // <--- STATE BARU UNTUK POPUP
+  const [showFriendWarning, setShowFriendWarning] = useState(false);
+  
+  // STATE BARU: PESAN DARI AI (BUAT GOMBAL/DETEKSI BENDA)
+  const [scannerMessage, setScannerMessage] = useState(null); 
+
   const [countdown, setCountdown] = useState(8);
   const [loadingMsg, setLoadingMsg] = useState("Menghubungkan ke AI...");
 
@@ -39,7 +41,7 @@ export default function Home() {
 
   useEffect(() => { window.scrollTo(0, 0); }, [step]);
 
-  // Loading Timer Logic
+  // Loading Timer
   useEffect(() => {
     let timer;
     if (isLoading) {
@@ -59,17 +61,16 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [isLoading]);
 
-  // --- LOGIKA ALUR ---
-  
+  // --- LOGIKA UTAMA ---
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
       setImage(file);
       setPreview(URL.createObjectURL(file));
+      setScannerMessage(null); // Reset pesan lama
     }
   };
 
-  // STEP 1: SCAN
   const handleScan = async () => {
     if (!image) return;
     setIsLoading(true);
@@ -81,6 +82,15 @@ export default function Home() {
       const result = await analyzeReceipt(formData);
       if (result.error) { alert(result.error); setIsLoading(false); return; }
 
+      // --- LOGIKA BARU: CEK TIPE GAMBAR ---
+      if (result.data.status === 'not_receipt') {
+        // Kalau BUKAN struk (misal Wajah/Benda)
+        setScannerMessage(result.data.message); // Tampilkan pesan lucu
+        setIsLoading(false);
+        return; 
+      }
+
+      // Kalau STRUK (Receipt), lanjut proses normal
       const formattedItems = result.data.items.map(item => ({ ...item, assignedTo: [] }));
       setItems(formattedItems);
 
@@ -93,7 +103,7 @@ export default function Home() {
     } finally { setIsLoading(false); }
   };
 
-  // STEP 2: INPUT TEMAN
+  // --- STEP 2, 3, 4 (LOGIKA LAMA) ---
   const addFriend = (e) => {
     e.preventDefault();
     const val = currentName.trim();
@@ -106,14 +116,12 @@ export default function Home() {
   
   const finishInputFriends = () => {
     if (friends.length === 0) {
-        // GANTI ALERT BIASA JADI POPUP MODAL
         setShowFriendWarning(true); 
         return;
     }
     setStep(3);
   };
 
-  // STEP 3: ASSIGN & HITUNG
   const toggleAssign = (idx, friend) => {
     const newItems = [...items];
     const item = newItems[idx];
@@ -134,27 +142,21 @@ export default function Home() {
     setStep(4);
   };
 
-  // Expand User Logic
   const toggleUserDetail = (name) => {
     setExpandedUsers(prev => {
-      if (prev.includes(name)) {
-        return prev.filter(u => u !== name); 
-      } else {
-        return [...prev, name]; 
-      }
+      if (prev.includes(name)) return prev.filter(u => u !== name); 
+      else return [...prev, name]; 
     });
   };
 
-  // RESET LOGIC
   const triggerReset = () => setShowResetModal(true);
   const confirmReset = () => {
     setStep(1); setImage(null); setPreview(null); setItems([]); setFriends([]);
     setTaxAmount(0); setServiceAmount(0); setRoundingAmount(0); 
-    setExpandedUsers([]);
+    setExpandedUsers([]); setScannerMessage(null);
     setShowResetModal(false);
   };
 
-  // CALCULATE BILL
   const getCalculatedBill = () => {
     const billData = {};
     friends.forEach(f => billData[f] = { items: [], subtotal: 0, extraCharge: 0, total: 0 });
@@ -193,7 +195,35 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 pb-40 relative">
       
-      {/* === MODAL PERINGATAN (BELUM ADA TEMAN) === */}
+      {/* === MODAL HASIL SCAN (JIKA BUKAN STRUK) === */}
+      {scannerMessage && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm animate-in fade-in" onClick={() => setScannerMessage(null)}></div>
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-xs p-6 animate-in zoom-in-95 duration-200 text-center">
+            
+            {/* Ikon Lucu */}
+            <div className="w-16 h-16 bg-pink-50 text-pink-500 rounded-full flex items-center justify-center mb-4 mx-auto animate-bounce">
+               <Smile size={32} />
+            </div>
+            
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Bukan Struk Nih!</h3>
+            
+            {/* Pesan dari AI */}
+            <p className="text-slate-600 text-md mb-6 leading-relaxed font-medium bg-slate-50 p-4 rounded-xl border border-slate-100">
+               "{scannerMessage}"
+            </p>
+            
+            <button 
+              onClick={() => setScannerMessage(null)}
+              className="w-full py-3 px-4 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-lg transition"
+            >
+              Coba Scan Lagi
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* === MODAL PERINGATAN TEMAN === */}
       {showFriendWarning && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowFriendWarning(false)}></div>
@@ -205,10 +235,7 @@ export default function Home() {
             <p className="text-slate-500 text-sm mb-6 leading-relaxed">
                Minimal masukin satu nama dulu dong (misal: <strong>Aku</strong>) biar bisa lanjut.
             </p>
-            <button 
-              onClick={() => setShowFriendWarning(false)}
-              className="w-full py-3 px-4 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition"
-            >
+            <button onClick={() => setShowFriendWarning(false)} className="w-full py-3 px-4 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition">
               Oke, Siap!
             </button>
           </div>
@@ -277,7 +304,7 @@ export default function Home() {
                 <div className="space-y-6">
                   <div className="relative h-96 w-full rounded-2xl overflow-hidden bg-slate-900 shadow-inner group border-4 border-indigo-100">
                     <NextImage src={preview} alt="Struk" fill className="object-contain" />
-                    <button onClick={() => {setImage(null); setPreview(null)}} className="absolute top-3 right-3 bg-black/50 backdrop-blur text-white p-2 rounded-full hover:bg-red-500 transition z-20"><X size={18} /></button>
+                    <button onClick={() => {setImage(null); setPreview(null); setScannerMessage(null);}} className="absolute top-3 right-3 bg-black/50 backdrop-blur text-white p-2 rounded-full hover:bg-red-500 transition z-20"><X size={18} /></button>
                   </div>
                   <button onClick={handleScan} className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 active:scale-[0.98] transition flex justify-center items-center gap-2 animate-in slide-in-from-bottom-2">
                     <ScanLine size={24} /> Mulai Scan Struk
@@ -299,7 +326,9 @@ export default function Home() {
           </div>
         )}
 
-        {/* === STEP 2: INPUT TEMAN === */}
+        {/* ... STEP 2, 3, 4 SAMA SEPERTI SEBELUMNYA ... */}
+        {/* Saya ringkas bagian ini karena tidak berubah, tapi pastikan kamu copy SELURUH KODE di atas yang sudah saya gabungkan lengkap */}
+        
         {step === 2 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300">
              <div className="text-center py-2">
@@ -328,7 +357,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* === STEP 3: ASSIGN ITEMS === */}
         {step === 3 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-right duration-300">
              <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex gap-3 items-start">
@@ -389,7 +417,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* === STEP 4: RESULT === */}
         {step === 4 && (
           <div className="space-y-4 animate-in zoom-in-95 duration-300">
             <div className="bg-green-50 border border-green-100 rounded-2xl p-4 flex gap-3 items-center">
@@ -399,7 +426,7 @@ export default function Home() {
 
             <div className="grid gap-3">
               {Object.entries(billData).map(([name, data]) => {
-                const isExpanded = expandedUsers.includes(name); // <-- CEK ARRAY
+                const isExpanded = expandedUsers.includes(name);
                 return (
                   <div key={name} className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden transition-all">
                     <button onClick={() => toggleUserDetail(name)} className="w-full p-5 flex justify-between items-center bg-white hover:bg-slate-50">
