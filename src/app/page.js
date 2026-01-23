@@ -6,7 +6,7 @@ import {
   Camera, Image as ImageIcon, X, Loader2, 
   Users, Sparkles, Check, ChevronRight, ChevronDown, ChevronUp,
   RefreshCw, HandCoins, ScanLine, Plus, Receipt, Wand2, Calculator,
-  ArrowRight
+  ArrowRight, AlertTriangle
 } from 'lucide-react';
 import { analyzeReceipt } from './actions'; 
 
@@ -24,12 +24,13 @@ export default function Home() {
   const [serviceAmount, setServiceAmount] = useState(0); 
   const [roundingAmount, setRoundingAmount] = useState(0); 
   
-  // LOGIKA BARU: Gunakan Array agar bisa buka banyak sekaligus
+  // Logic Expand User
   const [expandedUsers, setExpandedUsers] = useState([]); 
   
   // UI UX States
   const [isLoading, setIsLoading] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+  const [showFriendWarning, setShowFriendWarning] = useState(false); // <--- STATE BARU UNTUK POPUP
   const [countdown, setCountdown] = useState(8);
   const [loadingMsg, setLoadingMsg] = useState("Menghubungkan ke AI...");
 
@@ -105,7 +106,8 @@ export default function Home() {
   
   const finishInputFriends = () => {
     if (friends.length === 0) {
-        alert("Minimal masukin satu nama dulu dong (misal: Aku)");
+        // GANTI ALERT BIASA JADI POPUP MODAL
+        setShowFriendWarning(true); 
         return;
     }
     setStep(3);
@@ -132,13 +134,13 @@ export default function Home() {
     setStep(4);
   };
 
-  // --- LOGIKA EXPAND USER (BARU) ---
+  // Expand User Logic
   const toggleUserDetail = (name) => {
     setExpandedUsers(prev => {
       if (prev.includes(name)) {
-        return prev.filter(u => u !== name); // Tutup jika sudah ada
+        return prev.filter(u => u !== name); 
       } else {
-        return [...prev, name]; // Buka (tambah ke array)
+        return [...prev, name]; 
       }
     });
   };
@@ -148,7 +150,7 @@ export default function Home() {
   const confirmReset = () => {
     setStep(1); setImage(null); setPreview(null); setItems([]); setFriends([]);
     setTaxAmount(0); setServiceAmount(0); setRoundingAmount(0); 
-    setExpandedUsers([]); // Reset list expand
+    setExpandedUsers([]);
     setShowResetModal(false);
   };
 
@@ -191,7 +193,29 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#F8FAFC] font-sans text-slate-800 pb-40 relative">
       
-      {/* MODAL RESET */}
+      {/* === MODAL PERINGATAN (BELUM ADA TEMAN) === */}
+      {showFriendWarning && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowFriendWarning(false)}></div>
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-xs p-6 animate-in zoom-in-95 duration-200 text-center">
+            <div className="w-14 h-14 bg-yellow-50 text-yellow-500 rounded-2xl flex items-center justify-center mb-4 mx-auto">
+               <Users size={28} />
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Sendirian Aja?</h3>
+            <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+               Minimal masukin satu nama dulu dong (misal: <strong>Aku</strong>) biar bisa lanjut.
+            </p>
+            <button 
+              onClick={() => setShowFriendWarning(false)}
+              className="w-full py-3 px-4 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition"
+            >
+              Oke, Siap!
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* === MODAL RESET === */}
       {showResetModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowResetModal(false)}></div>
