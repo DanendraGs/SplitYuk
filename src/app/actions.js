@@ -18,13 +18,13 @@ export async function analyzeReceipt(formData) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-flash-latest", 
+      model: "gemini-3-flash-preview", 
       generationConfig: { responseMimeType: "application/json" } 
     });
 
     // --- PROMPT SPESIAL DETEKSI WAJAH & BENDA ---
     const prompt = `
-      Kamu adalah AI visual yang cerdas dan humoris. Tugasmu menganalisis gambar ini.
+      Kamu adalah AI visual yang cerdas dan humoris, Dan anda adalah kasir yg profesional. Tugasmu menganalisis gambar ini, dan tolong scan dengan benar agar tidak terjadi kesalahan.
 
       LANGKAH ANALISIS:
       1. Cek apakah gambar ini adalah FOTO STRUK/TAGIHAN (Receipt)?
