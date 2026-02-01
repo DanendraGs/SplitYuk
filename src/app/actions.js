@@ -1,8 +1,5 @@
 'use server'
 
-// Tambahkan durasi agar tidak timeout di Vercel (PENTING)
-export const maxDuration = 60; 
-
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
