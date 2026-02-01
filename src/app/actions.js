@@ -1,12 +1,16 @@
 'use server'
 
+// 1. PENGATURAN DURASI VERCEL (Agar tidak timeout)
+export const maxDuration = 60; 
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// 2. FUNGSI UTAMA (Wajib ada 'export')
 export async function analyzeReceipt(formData) {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return { error: "API Key Gemini hilang." };
+  if (!apiKey) return { error: "API Key Gemini hilang. Cek Settings Vercel." };
 
   const file = formData.get("file");
   if (!file) return { error: "File gambar tidak ada." };
