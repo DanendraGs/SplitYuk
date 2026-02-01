@@ -1,5 +1,8 @@
 'use server'
 
+// Tambahkan durasi agar tidak timeout di Vercel (PENTING)
+export const maxDuration = 60; 
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -22,43 +25,57 @@ export async function analyzeReceipt(formData) {
       generationConfig: { responseMimeType: "application/json" } 
     });
 
-    // --- PROMPT SPESIAL DETEKSI WAJAH & BENDA ---
+    // --- PROMPT YANG SUDAH DIPERTEGAS MATEMATIKANYA ---
     const prompt = `
-      Kamu adalah AI visual yang cerdas dan humoris, Dan anda adalah kasir yg profesional. Tugasmu menganalisis gambar ini, dan tolong scan dengan benar agar tidak terjadi kesalahan.
+      Kamu adalah AI visual yang sangat teliti dalam angka dan humoris.
 
       LANGKAH ANALISIS:
-      1. Cek apakah gambar ini adalah FOTO STRUK/TAGIHAN (Receipt)?
-      2. Jika BUKAN struk, cek apakah ini FOTO WAJAH MANUSIA?
-      3. Jika BUKAN keduanya, benda apakah ini?
+      1. Cek apakah gambar ini FOTO STRUK/TAGIHAN (Receipt)?
+      2. Jika BUKAN, cek apakah FOTO WAJAH MANUSIA?
+      3. Jika BUKAN keduanya, benda apa ini?
 
-      ATURAN OUTPUT (WAJIB JSON):
+      --- ATURAN OUTPUT (WAJIB JSON) ---
 
-      KONDISI A: JIKA INI ADALAH STRUK/TAGIHAN
-      Ekstrak data menu seperti biasa.
+      KONDISI A: JIKA INI ADALAH STRUK (RECEIPT)
+      Ekstrak data menu dengan aturan MATEMATIKA berikut:
+      
+      ⚠️ INSTRUKSI SANGAT PENTING (HARGA):
+      1. Field "price" WAJIB berisi HARGA TOTAL PER BARIS (Line Amount).
+      2. Rumus: "price" = Qty x Harga Satuan.
+      3. CONTOH KASUS: 
+         - Jika tertulis "2 Es Teh @ 15.000 ... 30.000".
+         - Maka Output HARUS: { "name": "Es Teh", "qty": 2, "price": 30000 }
+         - JANGAN isi 15000. Ambil angka paling kanan (Totalnya).
+      4. Abaikan 'Subtotal', 'Total', 'Cash', 'Kembali' dalam daftar items.
+      5. Pisahkan Tax & Service ke field terpisah.
+
+      Output JSON Struk:
       {
         "status": "receipt",
-        "items": [{ "name": "Nama Menu", "qty": 1, "price": 10000 }],
-        "tax_total": 0,
+        "items": [
+           { "name": "Nama Menu", "qty": 2, "price": 80000 } 
+        ],
+        "tax_total": 5000, 
         "service_total": 0
       }
+      (Pastikan "price" adalah angka murni tanpa titik/koma).
 
-      KONDISI B: JIKA INI WAJAH MANUSIA (SELFIE/FOTO ORANG)
-      Berikan pujian yang menghibur, lucu, dan memotivasi (tentang orang sukses/kaya).
+      KONDISI B: JIKA INI WAJAH MANUSIA
+      Berikan pujian humoris tentang aura kesuksesan/kekayaan.
       {
         "status": "not_receipt",
-        "message": "Waduh, maaf ini bukan struk! Tapi saya melihat aura orang sukses yang ganteng/cantik. Rezekinya lancar nih!"
+        "message": "Waduh, ini bukan struk! Tapi saya melihat wajah calon miliarder di sini. Aura glowing-nya ngalahin layar HP!"
       }
-      (Variasikan kata-katanya agar tidak membosankan, puji visualnya).
 
-      KONDISI C: JIKA INI BENDA LAIN (BUKAN STRUK, BUKAN ORANG)
-      Sebutkan benda apa itu dengan nada santai.
+      KONDISI C: JIKA BENDA LAIN
+      Sebutkan benda apa itu.
       {
         "status": "not_receipt",
-        "message": "Maaf, ini bukan struk tagihan. Ini sepertinya [NAMA BENDA]. Coba scan kertas tagihannya ya!"
+        "message": "Maaf, ini bukan struk. Ini sepertinya [NAMA BENDA]. Coba scan kertas tagihannya yang ada angkanya ya!"
       }
     `;
 
-    // RETRY LOGIC
+    // RETRY LOGIC (Mencoba 3x jika gagal)
     let attempt = 0;
     while (attempt < 3) {
       try {
@@ -72,14 +89,15 @@ export async function analyzeReceipt(formData) {
 
         return { success: true, data: data };
       } catch (err) {
+        console.warn(`Attempt ${attempt+1} failed:`, err.message);
         attempt++;
         if (attempt < 3) await delay(1500);
       }
     }
-    throw new Error("Gagal mengenali gambar.");
+    throw new Error("Gagal mengenali gambar setelah 3x percobaan.");
 
   } catch (error) {
     console.error("SERVER ERROR:", error);
-    return { error: "Gagal memproses gambar. Coba lagi ya." };
+    return { error: "Gagal memproses gambar. Pastikan internet stabil." };
   }
 }
