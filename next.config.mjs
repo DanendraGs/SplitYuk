@@ -1,18 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // 1. Matikan Polisi Koding (ESLint) agar warning tidak dianggap Error
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  
-  // 2. Matikan Polisi Tipe Data (TypeScript) jaga-jaga kalau ada
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  // 1. PINDAHKAN KE SINI (Di luar 'experimental')
+  // Ubah namanya jadi 'serverExternalPackages' (sesuai pesan error)
+  serverExternalPackages: ['tesseract.js'],
 
-  // 3. PENTING: Jangan masukkan 'experimental: { serverActions: true }'
-  // Karena di Next.js 16 (yang kamu pakai), serverActions sudah aktif otomatis.
-  // Kalau ditulis manual malah bikin error.
+  experimental: {
+    // 2. Pengaturan Upload Besar tetap di sini
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
+  },
 };
 
 export default nextConfig;
