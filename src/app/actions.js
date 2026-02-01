@@ -1,8 +1,5 @@
 'use server'
 
-// 1. PENGATURAN DURASI VERCEL (Agar tidak timeout)
-export const maxDuration = 60; 
-
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
